@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
 import { ethers } from "ethers";
-
-// --- THIRDWEB IMPORTS COMMENTED OUT ---
-// import { useActiveAccount, useActiveWallet, useDisconnect, useReadContract } from "thirdweb/react";
-// import { client } from "./client";
-// import { privateKeyToAccount } from "thirdweb/wallets";
-// import { waitForReceipt, prepareContractCall, sendTransaction } from "thirdweb";
-// import { upload } from "thirdweb/storage";
-
-import { contractAddress, contractABI } from "./contract";
+import { 
+  useActiveAccount, 
+  useActiveWallet, 
+  useDisconnect, 
+  useReadContract,
+  ConnectButton
+} from "thirdweb/react";
+import { client } from "./client";
+import { prepareContractCall, sendTransaction, readContract } from "thirdweb";
+import { contract, chain } from "./contract";
 import { theme } from "./theme";
 import { useGeoCalibration } from "./hooks/useGeoCalibration";
 
@@ -16,12 +17,12 @@ import { useGeoCalibration } from "./hooks/useGeoCalibration";
 import { AccountInfo } from "./components/AccountInfo";
 import { DonorView } from "./components/DonorView";
 import { NGOView } from "./components/NGOView";
-import { BeneficiaryView } from "./components/BeneficiaryView";
+import { BeneficiaryView } from "./components/BeneficiaryView.tsx";
 
 export default function App() {
-  const [account, setAccount] = useState<string | null>(null);
-  const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
-  const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
+  const account = useActiveAccount();
+  const wallet = useActiveWallet();
+  const { disconnect } = useDisconnect();
 
   const [role, setRole] = useState<"donor" | "ngo" | "beneficiary" | null>(null);
 
@@ -35,173 +36,302 @@ export default function App() {
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(null);
 
   // Shared States (Passed to children)
-  const [liveFile, setLiveFile] = useState<File | null>(null);
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
-  const [docFileKey, setDocFileKey] = useState(0);     // increment to reset doc input
-  const [uploadPhase, setUploadPhase] = useState<null | "ipfs" | "chain">(null);
-  const [isUploading, setIsUploading] = useState(false);
   const [donationAmount, setDonationAmount] = useState("0.01");
 
-  // Contract Data
-  const [campaignCount, setCampaignCount] = useState<number | null>(null);
-  const [campaign, setCampaign] = useState<any>(null);
-  const [proofs, setProofs] = useState<{ cid: string, isLiveCapture: boolean }[] | undefined>(undefined);
-  const [readError, setReadError] = useState<any>(null);
-  const [hasVoted, setHasVoted] = useState<boolean>(false);
-  const [donations, setDonations] = useState<{ donor: string, amount: string, txHash: string }[]>([]);
+  // --- DATA FETCHING (Thirdweb Hooks) ---
+  const { data: countData, refetch: refetchCount } = useReadContract({
+    contract,
+    method: "function nextCampaignId() view returns (uint256)",
+    params: []
+  });
+  const campaignCount = countData ? Number(countData) : null;
 
-  const handleConnectMetamask = async () => {
+  const { data: campData, refetch: refetchCampaign } = useReadContract({
+    contract,
+    method: "function getCampaignDetails(uint256) view returns (string, uint256, uint256, uint256, uint8, bool, address, uint256, uint256, bool)",
+    params: [BigInt(selectedCampaignId || 0)]
+  });
+
+  // ---- PROOFS: use readContract (async JSON ABI) instead of the hook ----
+  // useReadContract cannot reliably decode tuple[] return types in thirdweb v5.
+  const [proofsData, setProofsData] = useState<Array<{ cid: string; isLiveCapture: boolean }>>([]);
+
+  const fetchProofs = async (campaignId: number): Promise<Array<{ cid: string; isLiveCapture: boolean }>> => {
     try {
-      if ((window as any).ethereum) {
-        const browserProvider = new ethers.BrowserProvider((window as any).ethereum);
-        await browserProvider.send("eth_requestAccounts", []);
-
-        const targetChainId = "0x7a69"; // 31337 in hex
-        try {
-          await (window as any).ethereum.request({
-            method: "wallet_switchEthereumChain",
-            params: [{ chainId: targetChainId }],
-          });
-        } catch (switchError: any) {
-          // This error code indicates that the chain has not been added to MetaMask.
-          if (switchError.code === 4902) {
-            await (window as any).ethereum.request({
-              method: "wallet_addEthereumChain",
-              params: [
-                {
-                  chainId: targetChainId,
-                  chainName: "Localhost 8545",
-                  rpcUrls: ["http://127.0.0.1:8545"],
-                  nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-                },
-              ],
-            });
-          } else {
-            throw switchError;
-          }
-        }
-        const connectedSigner = await browserProvider.getSigner();
-        setAccount(await connectedSigner.getAddress());
-        setProvider(browserProvider);
-        setSigner(connectedSigner);
-      } else {
-        setError("MetaMask is not installed.");
-      }
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      if (msg.includes("same RPC endpoint") || msg.includes("0x539")) {
-        setError("MetaMask Conflict: Please open MetaMask -> Settings -> Networks, click on 'Localhost 8545', and change the Chain ID to 31337 (or delete it and click connect again).");
-      } else {
-        setError("Failed to connect MetaMask: " + msg);
-      }
+      console.log(`[FETCH_PROOFS] Calling getProofs(${campaignId})...`);
+      const raw = await readContract({
+        contract,
+        method: {
+          type: "function",
+          name: "getProofs",
+          inputs: [{ name: "_campaignId", type: "uint256" }],
+          outputs: [{
+            name: "",
+            type: "tuple[]",
+            components: [
+              { name: "cid",           type: "string" },
+              { name: "isLiveCapture", type: "bool"   }
+            ]
+          }],
+          stateMutability: "view"
+        } as any,
+        params: [BigInt(campaignId)]
+      });
+      const parsed = (Array.isArray(raw) ? raw : []).map((p: any) => ({
+        cid:           (p.cid           ?? p[0] ?? "")   as string,
+        isLiveCapture: (p.isLiveCapture !== undefined ? p.isLiveCapture : !!p[1]) as boolean
+      }));
+      console.log(`[FETCH_PROOFS] Received ${parsed.length} proof(s):`, parsed);
+      setProofsData(parsed);
+      return parsed;
+    } catch (e) {
+      console.error("[FETCH_PROOFS_ERROR]", e);
+      return proofsData; // keep stale on error
     }
   };
 
-  const disconnect = () => {
-    setAccount(null);
-    setProvider(null);
-    setSigner(null);
-    setRole(null);
-    setSelectedCampaignId(null);
-  };
+  const { data: voteData, refetch: refetchVoted } = useReadContract({
+    contract,
+    method: "function hasVoted(uint256, address) view returns (bool)",
+    params: [BigInt(selectedCampaignId || 0), account?.address || "0x0000000000000000000000000000000000000000"]
+  });
 
-  // Listen to MetaMask account and chain changes
-  useEffect(() => {
-    const handleAccountsChanged = async (accounts: string[]) => {
-      if (accounts.length > 0) {
-        if (provider) {
-          const newSigner = await provider.getSigner();
-          setAccount(await newSigner.getAddress());
-          setSigner(newSigner);
-        }
-      } else {
-        disconnect();
-      }
-    };
-
-    const handleChainChanged = () => {
-      // Reload the page if the user changes the network manually inside MetaMask
-      window.location.reload();
-    };
-
-    if ((window as any).ethereum) {
-      (window as any).ethereum.on("accountsChanged", handleAccountsChanged);
-      (window as any).ethereum.on("chainChanged", handleChainChanged);
-    }
-    return () => {
-      if ((window as any).ethereum) {
-        (window as any).ethereum.removeListener("accountsChanged", handleAccountsChanged);
-        (window as any).ethereum.removeListener("chainChanged", handleChainChanged);
-      }
-    };
-  }, [provider]);
+  const campaign = campData;
+  const hasVoted = !!voteData;
 
   const readData = async () => {
-    try {
-      // Use JsonRpcProvider for read-only calls so we don't rely only on MetaMask being connected
-      const rpcProvider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
-      const readContract = new ethers.Contract(contractAddress, contractABI, rpcProvider);
-
-      const count = await readContract.nextCampaignId();
-      setCampaignCount(Number(count));
-
-      if (selectedCampaignId !== null) {
-        const campData = await readContract.getCampaignDetails(selectedCampaignId);
-        setCampaign(campData);
-
-        const pf = await readContract.getProofs(selectedCampaignId);
-        setProofs(pf.map((p: any) => ({ cid: p.cid, isLiveCapture: p.isLiveCapture })));
-
-        if (account) {
-          const votedState = await readContract.hasVoted(selectedCampaignId, account);
-          setHasVoted(votedState);
-        }
-
-        // Fetch Donation history for the transparency ledger
-        const filter = readContract.filters.DonationReceived(selectedCampaignId);
-        const latestBlock = await rpcProvider.getBlockNumber();
-        const startBlock = Math.max(0, latestBlock - 10000);
-        const logs = await readContract.queryFilter(filter, startBlock); 
-
-        const parsedDonations = logs.map(l => {
-          try {
-            const parsed = readContract.interface.parseLog(l);
-            if (!parsed) return null;
-            return {
-              donor: parsed.args.donor as string,
-              amount: ethers.formatEther(parsed.args.amount),
-              txHash: l.transactionHash
-            };
-          } catch (e) {
-            console.error("Parse log error:", e);
-            return null;
-          }
-        }).filter((d): d is { donor: string, amount: string, txHash: string } => d !== null).reverse();
-        
-        setDonations(parsedDonations);
-      }
-    } catch (e: unknown) {
-      console.error("Read error:", e);
-      setReadError(e instanceof Error ? e : new Error(String(e)));
-    }
+    const fetches: Promise<any>[] = [refetchCount(), refetchCampaign(), refetchVoted()];
+    if (selectedCampaignId !== null) fetches.push(fetchProofs(selectedCampaignId));
+    await Promise.all(fetches);
   };
 
   useEffect(() => {
-    readData();
-    const interval = setInterval(() => {
-      readData();
-    }, 5000);
-    return () => clearInterval(interval);
+    const syncData = async () => {
+      const { data: currentCount } = await refetchCount();
+      console.info(`[DEEP_DEBUG_SYNC] PROT0C0L_COUNT: ${currentCount}`);
+      
+      if (selectedCampaignId === null && currentCount !== undefined && Number(currentCount) > 0) {
+        setSelectedCampaignId(Number(currentCount) - 1);
+      }
+      
+      if (selectedCampaignId !== null || (currentCount !== undefined && Number(currentCount) > 0)) {
+        await readData();
+      }
+    };
+    syncData();
+  }, [selectedCampaignId, countData, account?.address]);
+
+  // Fetch proofs whenever the selected campaign changes
+  useEffect(() => {
+    if (selectedCampaignId !== null) fetchProofs(selectedCampaignId);
   }, [selectedCampaignId]);
 
   useEffect(() => {
-    if (selectedCampaignId === null && campaignCount !== null && campaignCount > 0) {
-      console.log("AUTO-SELECTING Campaign 0");
-      setSelectedCampaignId(0);
-    }
-  }, [selectedCampaignId, campaignCount]);
+    console.info(`[FETCH_PROOFS_STATE] proofsData length:`, proofsData.length, proofsData);
+  }, [proofsData]);
 
-  const stage = campaign ? Number(campaign[4]) : 0;
+  // Handle Role logic (mocking donations ledger for now on Amoy)
+  const donations: any[] = [];
+
+  const handleApprove = async () => {
+    if (!account || selectedCampaignId === null) return;
+    setIsProcessing(true);
+    setTxHash(null);
+    setError(null);
+
+    try {
+      // ── PRE-FLIGHT: read FRESH on-chain state to diagnose which require() fails ──
+      console.log(`[APPROVE_PREFLIGHT] Reading fresh on-chain state for campaign #${selectedCampaignId}...`);
+      console.log(`[APPROVE_PREFLIGHT] caller (account.address) = ${account.address}`);
+
+      const fresh = await readContract({
+        contract,
+        method: "function getCampaignDetails(uint256) view returns (string, uint256, uint256, uint256, uint8, bool, address, uint256, uint256, bool)",
+        params: [BigInt(selectedCampaignId)]
+      }) as readonly [string, bigint, bigint, bigint, number, boolean, string, bigint, bigint, boolean];
+
+      const [cName, cTarget, cDonated, , cStage, cActive, cNgo] = fresh;
+      const threshold = cTarget / 10n;
+
+      console.log(`[APPROVE_PREFLIGHT] campaign.name      = ${cName}`);
+      console.log(`[APPROVE_PREFLIGHT] campaign.ngo       = ${cNgo}`);
+      console.log(`[APPROVE_PREFLIGHT] caller             = ${account.address}`);
+      console.log(`[APPROVE_PREFLIGHT] auth_ok            = ${account.address.toLowerCase() === cNgo.toLowerCase() ? "✅ caller IS ngo" : "❌ caller NOT ngo — this is the revert reason!"}`);
+      console.log(`[APPROVE_PREFLIGHT] campaign.stage     = ${cStage} (need < 3)`);
+      console.log(`[APPROVE_PREFLIGHT] campaign.isActive  = ${cActive}`);
+      console.log(`[APPROVE_PREFLIGHT] campaign.donated   = ${ethers.formatEther(cDonated)} POL`);
+      console.log(`[APPROVE_PREFLIGHT] 10% threshold      = ${ethers.formatEther(threshold)} POL`);
+      console.log(`[APPROVE_PREFLIGHT] funding_gate_ok    = ${cDonated >= threshold ? "✅ funded" : `❌ underfunded — need ${ethers.formatEther(threshold - cDonated)} more POL`}`);
+
+      // Surface a clear error BEFORE wasting gas if we already know it'll revert
+      if (account.address.toLowerCase() !== cNgo.toLowerCase()) {
+        throw new Error(`Not authorized: your address (${account.address.slice(0,8)}…) is not the campaign NGO (${cNgo.slice(0,8)}…). Did you create this campaign with a different wallet?`);
+      }
+      if (cStage >= 3) {
+        throw new Error(`Campaign already completed (stage=${cStage}).`);
+      }
+      if (cStage === 0 && cDonated < threshold) {
+        throw new Error(`10% funding gate not met: donated=${ethers.formatEther(cDonated)} POL, need ${ethers.formatEther(threshold)} POL.`);
+      }
+
+      console.log(`[APPROVE_PREFLIGHT] All checks passed — sending approveMilestone tx...`);
+      const tx = prepareContractCall({
+        contract,
+        method: "function approveMilestone(uint256)",
+        params: [BigInt(selectedCampaignId)]
+      });
+      const { transactionHash } = await sendTransaction({ transaction: tx, account });
+      console.log(`[APPROVE_TX_SUCCESS] hash=${transactionHash}`);
+      setTxHash(transactionHash);
+      await readData();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[APPROVE_FAIL]`, msg);
+      setError("Approval failed: " + msg);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleVote = async (support: boolean) => {
+    if (!account || selectedCampaignId === null) return;
+    setIsProcessing(true);
+    setTxHash(null);
+    setError(null);
+    try {
+      const tx = prepareContractCall({
+        contract,
+        method: "function vote(uint256, bool)",
+        params: [BigInt(selectedCampaignId), support]
+      });
+      const { transactionHash } = await sendTransaction({ transaction: tx, account });
+      setTxHash(transactionHash);
+      await readData();
+    } catch (e: any) {
+      setError(e.message || "Voting failed");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRequestMilestone = async () => {
+    if (!account || selectedCampaignId === null) return;
+    setIsProcessing(true);
+    setTxHash(null);
+    setError(null);
+    try {
+      const tx = prepareContractCall({
+        contract,
+        method: "function requestMilestoneRelease(uint256)",
+        params: [BigInt(selectedCampaignId)]
+      });
+      const { transactionHash } = await sendTransaction({ transaction: tx, account });
+      setTxHash(transactionHash);
+      await readData();
+    } catch (e: unknown) {
+      setError("Milestone request failed: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDonate = async () => {
+    if (!account || selectedCampaignId === null) return;
+    setIsProcessing(true);
+    setTxHash(null);
+    setError(null);
+
+    // Snapshot donated amount BEFORE tx so we can detect the change
+    const donatedBefore = campData?.[2];
+    console.log(`[DONATE_START] campaignId=${selectedCampaignId} | amount=${donationAmount} POL`);
+    console.log(`[DONATE_START] donated_before=${donatedBefore !== undefined ? ethers.formatEther(donatedBefore) + " POL" : "unknown (campData not loaded yet)"}`);
+    console.log(`[DONATE_START] campData raw:`, campData);
+
+    try {
+      const tx = prepareContractCall({
+        contract,
+        method: "function donate(uint256) payable",
+        params: [BigInt(selectedCampaignId)],
+        value: ethers.parseEther(donationAmount)
+      });
+      const { transactionHash } = await sendTransaction({ transaction: tx, account });
+      console.log(`[DONATE_TX_SUCCESS] hash=${transactionHash} | Polling for on-chain state...`);
+      setTxHash(transactionHash);
+
+      // Poll refetchCampaign until the donated amount changes (max 12 × 2.5s = 30s)
+      let retries = 0;
+      let synced = false;
+      while (retries < 12) {
+        await new Promise(r => setTimeout(r, 2500));
+        const { data: latest } = await refetchCampaign();
+        const donatedAfter = latest?.[2];
+        console.log(
+          `[DONATE_POLL] attempt=${retries + 1}/12 | donated_now=${donatedAfter !== undefined ? ethers.formatEther(donatedAfter) + " POL" : "undefined"} | donatedBefore=${donatedBefore !== undefined ? ethers.formatEther(donatedBefore) + " POL" : "unknown"}`
+        );
+        // Compare as strings to avoid bigint equality pitfalls
+        if (donatedAfter !== undefined && donatedAfter?.toString() !== donatedBefore?.toString()) {
+          console.log(`[DONATE_SYNCED] New on-chain donated: ${ethers.formatEther(donatedAfter)} POL ✅`);
+          synced = true;
+          break;
+        }
+        retries++;
+      }
+      if (!synced) console.warn(`[DONATE_SYNC_TIMEOUT] donated amount unchanged after 30s — RPC may be lagging`);
+
+      // Final full refresh for all state
+      await readData();
+      console.log(`[DONATE_COMPLETE] readData() done. campData after:`, campData);
+    } catch (e: any) {
+      console.error(`[DONATE_FAIL]`, e);
+      setError("Donation failed: " + (e.message || String(e)));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCreateCampaign = async (name: string, targetGoalEth: string) => {
+    if (!account) return;
+    setIsProcessing(true);
+    setTxHash(null);
+    setError(null);
+    const oldCount = Number(countData || 0);
+
+    try {
+      const tx = prepareContractCall({
+        contract,
+        method: "function createCampaign(string, uint256)",
+        params: [name, ethers.parseEther(targetGoalEth)]
+      });
+      const { transactionHash } = await sendTransaction({ transaction: tx, account });
+      setTxHash(transactionHash);
+      
+      // POLL: Wait up to 15 seconds for the counter to increment on-chain
+      let retryCount = 0;
+      while (retryCount < 8) {
+        await new Promise(r => setTimeout(r, 2000)); // Wait 2s
+        const { data: latestCount } = await refetchCount();
+        const currentCount = Number(latestCount || 0);
+        
+        console.log(`Sync Polling: Old=${oldCount}, Current=${currentCount}`);
+
+        if (currentCount > oldCount) {
+          const newId = currentCount - 1;
+          setSelectedCampaignId(newId);
+          // Force a full data refresh for the new ID
+          await Promise.all([refetchCount(), refetchCampaign(), fetchProofs(newId), refetchVoted()]);
+          return; // Success!
+        }
+        retryCount++;
+      }
+      
+      // Fallback if polling timed out
+      await readData();
+    } catch (e: any) {
+      setError("Campaign creation failed: " + (e.message || String(e)));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const normalizedCampaign = campaign ? {
     name: campaign[0] as string,
@@ -213,219 +343,21 @@ export default function App() {
     ngo: campaign[6] as string,
     yesVotes: Number(campaign[7]),
     noVotes: Number(campaign[8]),
-    milestoneRequested: campaign[9] === true || campaign[9] === 1n || campaign[9] === 1 as any
+    milestoneRequested: campaign[9] === true
   } : null;
 
-  // DEBUG: Campaign State Tracking
-  if (normalizedCampaign) {
-    console.log("DEBUG: ReliefDAO Engine Sync", {
-      stage: normalizedCampaign.stage,
-      raw_stage: campaign[4]?.toString(),
-      raw_active: campaign[5]?.toString(),
-      raw_ngo: campaign[6]?.toString(),
-      yes: normalizedCampaign.yesVotes,
-      requested: normalizedCampaign.milestoneRequested
-    });
-  }
-
-
-  // Handlers
-  const handleCreateCampaign = async (name: string, target: string) => {
-    if (!account || !signer) return;
-    setIsProcessing(true);
-    setTxHash(null);
-    setError(null);
-    try {
-      const contract = new ethers.Contract(contractAddress, contractABI, signer);
-      const targetGoal = ethers.parseEther(target.toString());
-      const tx = await contract.createCampaign(name, targetGoal);
-      const receipt = await tx.wait();
-      setTxHash(receipt.hash);
-
-      await readData();
-      if (campaignCount !== null) {
-        const newId = Number(campaignCount) > 0 ? Number(campaignCount) - 1 : 0;
-        setSelectedCampaignId(newId);
-      }
-    } catch (e: unknown) {
-      setError("Campaign creation failed: " + (e instanceof Error ? e.message : String(e)));
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleDonate = async () => {
-    if (!account || !signer || selectedCampaignId === null) return;
-    setIsProcessing(true);
-    setTxHash(null);
-    setError(null);
-    try {
-      const contract = new ethers.Contract(contractAddress, contractABI, signer);
-      const value = ethers.parseEther(donationAmount.toString());
-      const tx = await contract.donate(selectedCampaignId, { value });
-      const receipt = await tx.wait();
-      setTxHash(receipt.hash);
-      await readData();
-    } catch (e: unknown) {
-      setError("Donation failed: " + (e instanceof Error ? e.message : String(e)));
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Shared helper: upload a file to Pinata and return its CID
-  const uploadToPinata = async (file: File, metadata: object): Promise<string> => {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("pinataMetadata", JSON.stringify(metadata));
-    const res = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${import.meta.env.VITE_PINATA_JWT}` },
-      body: formData,
-    });
-    if (!res.ok) throw new Error(`Pinata upload failed: ${res.statusText}`);
-    const data = await res.json();
-    return data.IpfsHash;
-  };
-
-  // Channel A: Live camera proof (geo-tagged, timestamp-checked)
-  const handleUploadLiveProof = async () => {
-    if (!liveFile || !account || !signer || selectedCampaignId === null) return;
-    if (!gps.isReady || gps.lat === null || gps.lng === null) {
-      setError("GPS not ready. Please wait for calibration to complete (< 500m accuracy).");
-      return;
-    }
-    // Timestamp freshness check — must be captured within the last 5 minutes
-    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-    if (liveFile.lastModified < fiveMinutesAgo) {
-      setError("Proof must be captured live, not from history. Please take a new photo.");
-      return;
-    }
-    setIsUploading(true);
-    setUploadPhase("ipfs");
-    setTxHash(null);
-    setError(null);
-    try {
-      const cid = await uploadToPinata(liveFile, {
-        name: `Campaign_${selectedCampaignId}_LiveProof`,
-        keyvalues: {
-          latitude: gps.lat!.toString(),
-          longitude: gps.lng!.toString(),
-          gps_accuracy: Math.round(gps.accuracy!).toString(),
-          timestamp: new Date().toISOString(),
-          type: "live_capture"
-        }
-      });
-      setUploadPhase("chain");
-      const contract = new ethers.Contract(contractAddress, contractABI, signer);
-      const tx = await contract.submitProof(selectedCampaignId, cid, true);
-      const receipt = await tx.wait();
-      setTxHash(receipt.hash);
-      setLiveFile(null);
-      await readData();
-    } catch (e: unknown) {
-      setError("Live proof failed: " + (e instanceof Error ? e.message : String(e)));
-    } finally {
-      setIsUploading(false);
-      setUploadPhase(null);
-    }
-  };
-
-  // Channel B: Document / invoice upload (Now explicitly requires GPS as requested)
-  const handleUploadDocument = async () => {
-    if (!documentFile || !account || !signer || selectedCampaignId === null) return;
-    if (!gps.isReady || gps.lat === null || gps.lng === null) {
-      setError("GPS not ready. Documents must also be stamped with your location.");
-      return;
-    }
-    setIsUploading(true);
-    setUploadPhase("ipfs");
-    setTxHash(null);
-    setError(null);
-    try {
-      const cid = await uploadToPinata(documentFile, {
-        name: `Campaign_${selectedCampaignId}_Document`,
-        keyvalues: {
-          type: "invoice",
-          latitude: gps.lat.toString(),
-          longitude: gps.lng.toString(),
-          gps_accuracy: Math.round(gps.accuracy!).toString()
-        }
-      });
-      setUploadPhase("chain");
-      const contract = new ethers.Contract(contractAddress, contractABI, signer);
-      const tx = await contract.submitProof(selectedCampaignId, cid, false);
-      const receipt = await tx.wait();
-      setTxHash(receipt.hash);
-      setDocumentFile(null);
-      setDocFileKey(k => k + 1);
-      await readData();
-    } catch (e: unknown) {
-      setError("Document upload failed: " + (e instanceof Error ? e.message : String(e)));
-    } finally {
-      setIsUploading(false);
-      setUploadPhase(null);
-    }
-  };
-
-  const handleApprove = async () => {
-    if (!account || !signer || selectedCampaignId === null) return;
-    setIsProcessing(true);
-    setTxHash(null);
-    setError(null);
-    try {
-      const contract = new ethers.Contract(contractAddress, contractABI, signer);
-      const tx = await contract.approveMilestone(selectedCampaignId);
-      const receipt = await tx.wait();
-      setTxHash(receipt.hash);
-      await readData();
-    } catch (e: unknown) {
-      setError("Approval failed: " + (e instanceof Error ? e.message : String(e)));
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  const handleVote = async (support: boolean) => {
-    if (!account || !signer || selectedCampaignId === null) return;
-    setIsProcessing(true);
-    setTxHash(null);
-    setError(null);
-    try {
-      const contract = new ethers.Contract(contractAddress, contractABI, signer);
-      const tx = await contract.vote(selectedCampaignId, support);
-      const receipt = await tx.wait();
-      setTxHash(receipt.hash);
-      await readData();
-    } catch (e: any) {
-      console.error("Voting failed:", e);
-      setError(e.reason || e.message || "Voting failed");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-
-  const handleRequestMilestone = async () => {
-    if (!account || !signer || selectedCampaignId === null) return;
-    setIsProcessing(true);
-    setTxHash(null);
-    setError(null);
-    try {
-      const contract = new ethers.Contract(contractAddress, contractABI, signer);
-      const tx = await contract.requestMilestoneRelease(selectedCampaignId);
-      const receipt = await tx.wait();
-      setTxHash(receipt.hash);
-      await readData();
-    } catch (e: unknown) {
-      setError("Milestone request failed: " + (e instanceof Error ? e.message : String(e)));
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+  // proofsData is already normalised by fetchProofs — use directly
+  const normalizedProofs = proofsData;
 
   return (
     <div style={theme.app}>
-
+      {/* GLOBAL ERROR HUD */}
+      {error && (
+        <div style={{ position: "fixed", top: "1rem", left: "50%", transform: "translateX(-50%)", zIndex: 10000, background: "#ef4444", color: "white", padding: "1rem 2rem", borderRadius: "1rem", fontWeight: "900", boxShadow: "0 10px 30px rgba(0,0,0,0.5)", border: "2px solid #7f1d1d", fontSize: "0.85rem", maxWidth: "90vw", textAlign: "center" }}>
+          ⚠️ PROTOCOL_CRITICAL: {error}
+          <button onClick={() => setError(null)} style={{ marginLeft: "1.5rem", background: "rgba(255,255,255,0.2)", border: "none", color: "white", borderRadius: "0.5rem", padding: "0.2rem 0.6rem", cursor: "pointer" }}>DISMISS</button>
+        </div>
+      )}
 
       <div style={{ ...theme.card, marginTop: "2rem" }}>
         <header style={{ textAlign: "center", marginBottom: "3rem" }}>
@@ -441,38 +373,62 @@ export default function App() {
           <div style={{ marginBottom: "2rem" }}>
             {!account ? (
               <div style={{ background: "#1e293b", padding: "1.5rem", borderRadius: "1rem", border: "1px solid #334155" }}>
-                <h3 style={{ fontSize: "1rem", margin: "0 0 1rem 0", textAlign: "center", color: "#94a3b8" }}>Metamask Authentication</h3>
+                <h3 style={{ fontSize: "1rem", margin: "0 0 1rem 0", textAlign: "center", color: "#94a3b8" }}>Authentication</h3>
                 <div style={{ display: "flex", justifyContent: "center" }}>
-                  <button
-                    onClick={handleConnectMetamask}
-                    style={{ ...theme.btn, marginTop: 0, fontSize: "0.9rem", padding: "0.75rem 2rem", background: "#f6851b", border: "none", color: "white", fontWeight: "bold" }}
-                  >
-                    🦊 Connect MetaMask
-                  </button>
+                   <ConnectButton
+                      client={client}
+                      chain={chain}
+                      accountAbstraction={{
+                        chain: chain,
+                        sponsorGas: true
+                      }}
+                      theme={"dark"}
+                    />
                 </div>
-                <p style={{ fontSize: "0.7rem", color: "#475569", marginTop: "1rem", textAlign: "center" }}>Please ensure MetaMask points to Hardhat (127.0.0.1:8545)</p>
               </div>
             ) : (
-              <div style={{ display: "flex", justifyContent: "center" }}>
-                <div style={theme.badge && { background: "#059669", color: "white", padding: "0.4rem 1rem", borderRadius: "2rem", fontSize: "0.8rem", fontWeight: "bold" }}>
-                  CONNECTED VIA METAMASK
+              <div style={{ background: "#0f172a", padding: "1rem 1.5rem", borderRadius: "1rem", border: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+                  <AccountInfo 
+                    address={account.address} 
+                    onDisconnect={() => { if(wallet) disconnect(wallet); }} 
+                  />
                 </div>
               </div>
             )}
           </div>
         </header>
 
-        {account && (
-          <div style={{ maxWidth: "600px", margin: "0 auto" }}>
-            {/* ROLE SELECTION */}
+        {!account ? (
+          <div style={{ textAlign: "center", padding: "4rem 0", color: "#475569" }}>
+            <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>🌍</div>
+            <h2 style={{ color: "#94a3b8", fontSize: "1.5rem", fontWeight: "700" }}>Welcome to ReliefDAO</h2>
+            <p style={{ maxWidth: "400px", margin: "1rem auto", lineHeight: "1.6" }}>
+              Connect your wallet to participate in decentralized humanitarian aid and transparent milestone verification.
+            </p>
+          </div>
+        ) : (
+          <>
             {!role ? (
-              <div style={{ padding: "1.5rem", background: "#1e293b", borderRadius: "1rem", textAlign: "center" }}>
-                <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem" }}>Select Your Role</h3>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem" }}>
-                  <button onClick={() => setRole("donor")} style={{ ...theme.btn, background: "#3b82f6", marginTop: 0 }}>I am a Donor</button>
-                  <button onClick={() => setRole("ngo")} style={{ ...theme.btn, background: "#10b981", marginTop: 0 }}>I am an NGO</button>
-                  <button onClick={() => setRole("beneficiary")} style={{ ...theme.btn, background: "#8b5cf6", marginTop: 0 }}>Beneficiary</button>
-                </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "2rem", padding: "1rem 0" }}>
+                {[
+                  { id: "donor", title: "Donor Portal", desc: "Contribute to life-saving campaigns and audit fund trails in real-time.", color: "#3b82f6", icon: "💎" },
+                  { id: "ngo", title: "NGO Workspace", desc: "Manage tranches, upload proof of execution, and request milestone releases.", color: "#10b981", icon: "🏗️" },
+                  { id: "beneficiary", title: "Beneficiary Hub", desc: "Registered community members can verify milestones and vote for release.", color: "#8b5cf6", icon: "⚖️" }
+                ].map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => setRole(r.id as any)}
+                    style={{ ...theme.card, border: `1px solid ${r.color}33`, textAlign: "left", transition: "all 0.3s ease", cursor: "pointer", position: "relative", overflow: "hidden" }}
+                    onMouseOver={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
+                    onMouseOut={(e) => (e.currentTarget.style.transform = "translateY(0)")}
+                  >
+                    <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>{r.icon}</div>
+                    <h3 style={{ color: r.color, fontSize: "1.25rem", fontWeight: "800", marginBottom: "0.5rem" }}>{r.title}</h3>
+                    <p style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: "1.5" }}>{r.desc}</p>
+                    <div style={{ marginTop: "1.5rem", color: r.color, fontWeight: "bold", fontSize: "0.8rem" }}>ACCESS PORTAL →</div>
+                  </button>
+                ))}
               </div>
             ) : (
               <>
@@ -480,77 +436,134 @@ export default function App() {
                   <div style={theme.badge && { background: role === "beneficiary" ? "#8b5cf6" : role === "donor" ? "#3b82f6" : "#10b981", color: "white", padding: "0.2rem 0.5rem", borderRadius: "0.5rem", fontSize: "0.75rem", fontWeight: "bold" }}>
                     ROLE: {role.toUpperCase()}
                   </div>
-                  
-                  {/* 🛠️ GLOBAL SYSTEM DEBUG RIBBON */}
-                  <div style={{ marginLeft: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "0.4rem", background: "rgba(2, 6, 23, 0.8)", border: "1px solid #334155", color: "#94a3b8", fontSize: "0.65rem", display: "flex", gap: "1rem", fontFamily: "monospace" }}>
-                    <span>STAGE: <b>{stage}</b></span>
-                    <span>RQST: <b>{normalizedCampaign?.milestoneRequested ? "YES" : "NO"}</b></span>
-                    <span>YES: <b>{normalizedCampaign?.yesVotes || 0}</b></span>
-                  </div>
-
                   <button onClick={() => { setRole(null); setSelectedCampaignId(null); }} style={{ background: "none", border: "none", color: "#3b82f6", cursor: "pointer", fontSize: "0.75rem" }}>Change Role</button>
                 </div>
 
-                {role === "beneficiary" ? (
-                  <BeneficiaryView
-                    campaignCount={Number(campaignCount || 0)}
+                {role === "donor" && (
+                  <DonorView
+                    campaignCount={campaignCount || 0}
                     selectedCampaignId={selectedCampaignId}
                     setSelectedCampaignId={setSelectedCampaignId}
-                    campaign={normalizedCampaign} 
-                    proofs={proofs}
+                    campaign={normalizedCampaign}
+                    donations={donations}
+                    proofs={normalizedProofs}
+                    onDonate={handleDonate}
+                    donationAmount={donationAmount}
+                    setDonationAmount={setDonationAmount}
+                    isProcessing={isProcessing}
+                    signer={null}
+                  />
+                )}
+                {role === "ngo" && (
+                  <>
+                    {(selectedCampaignId !== null && !normalizedCampaign) ? (
+                      <div style={{ ...theme.glass, padding: "5rem", textAlign: "center" }}>
+                        <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>📡</div>
+                        <h3 style={{ color: "#f8fafc" }}>Synchronizing Protocol</h3>
+                        <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>Linking your new relay on-chain. Please wait a moment...</p>
+                      </div>
+                    ) : (
+                      <NGOView
+                        campaignCount={campaignCount || 0}
+                        selectedCampaignId={selectedCampaignId}
+                        setSelectedCampaignId={setSelectedCampaignId}
+                        campaign={normalizedCampaign}
+                        proofs={normalizedProofs}
+                        donations={donations}
+                        onCreateCampaign={handleCreateCampaign}
+                        onApprove={handleApprove}
+                        onRequestMilestone={handleRequestMilestone}
+                        onUploadProof={async (file: File, isLive: boolean) => {
+                          if (!account || selectedCampaignId === null) return;
+                          setIsProcessing(true);
+                          setTxHash(null);
+                          setError(null);
+                          console.log(`[PROTOCOL_START] Uploading ${isLive ? "LIVE" : "DOC"} evidence...`);
+                          try {
+                            // Phase 1: Pinata Storage
+                            const formData = new FormData();
+                            formData.append("file", file);
+                            const pinataMetadata = JSON.stringify({
+                              name: `${isLive ? "LIVE" : "DOC"}_RELI3F_${Date.now()}`,
+                              keyvalues: {
+                                latitude: gps.lat?.toString() || "0",
+                                longitude: gps.lng?.toString() || "0",
+                                campaignId: selectedCampaignId.toString(),
+                                isLive: isLive.toString()
+                              }
+                            });
+                            formData.append("pinataMetadata", pinataMetadata);
+
+                            const res = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
+                              method: "POST",
+                              headers: { Authorization: `Bearer ${import.meta.env.VITE_PINATA_JWT}` },
+                              body: formData
+                            });
+
+                            if (!res.ok) throw new Error("Pinata pinning failed. Check JWT.");
+                            const resData = await res.json();
+                            const cid = resData.IpfsHash;
+                            console.log(`[IPFS_SUCCESS] CID: ${cid}`);
+
+                            // Phase 2: Blockchain Commitment
+                            const tx = prepareContractCall({
+                              contract,
+                              method: "function submitProof(uint256, string, bool)",
+                              params: [BigInt(selectedCampaignId), cid, isLive]
+                            });
+                            const { transactionHash } = await sendTransaction({ transaction: tx, account });
+                            console.log(`[BLOCKCHAIN_SUCCESS] TX: ${transactionHash}`);
+                            setTxHash(transactionHash);
+
+                            // Phase 3: Protocol Re-Sync — poll until proof count grows
+                            console.log(`[SYNC_START] Polling for evidence registry update...`);
+                            const oldCount = proofsData.length;
+                            let retries = 0;
+
+                            while (retries < 15) {
+                              await new Promise(r => setTimeout(r, 2000));
+                              const latest = await fetchProofs(selectedCampaignId);
+                              console.log(`[SYNC_POLL] attempt=${retries + 1} old=${oldCount} new=${latest.length}`);
+                              if (latest.length > oldCount) {
+                                console.log(`[SYNC_COMPLETE] PROOFS_COUNT: ${latest.length}`);
+                                break;
+                              }
+                              retries++;
+                            }
+
+                            if (retries >= 15) console.warn(`[SYNC_TIMEOUT] proof count did not grow after 15 polls`);
+                          } catch (e: any) {
+                            const errMsg = e.message || String(e);
+                            console.error(`[PROTOCOL_FAILURE] ${errMsg}`);
+                            setError("Protocol Sync Error: " + errMsg);
+                          } finally {
+                            setIsProcessing(false);
+                          }
+                        }}
+                        isProcessing={isProcessing}
+                        gps={gps}
+                      />
+                    )}
+                  </>
+                )}
+                {role === "beneficiary" && (
+                  <BeneficiaryView
+                    campaignCount={campaignCount || 0}
+                    selectedCampaignId={selectedCampaignId}
+                    setSelectedCampaignId={setSelectedCampaignId}
+                    campaign={normalizedCampaign}
+                    proofs={normalizedProofs}
                     donations={donations}
                     hasVoted={hasVoted}
                     onVote={handleVote}
                     isProcessing={isProcessing}
-                  />
-                ) : role === "donor" ? (
-                  <DonorView
-                    campaignCount={Number(campaignCount || 0)}
-                    selectedCampaignId={selectedCampaignId}
-                    setSelectedCampaignId={setSelectedCampaignId}
-                    campaign={normalizedCampaign} 
-                    proofs={proofs} 
-                    donations={donations}
-                    donationAmount={donationAmount}
-                    setDonationAmount={setDonationAmount}
-                    onDonate={handleDonate}
-                    isProcessing={isProcessing}
-                  />
-                ) : (
-                  <NGOView
-                    campaignCount={Number(campaignCount || 0)}
-                    selectedCampaignId={selectedCampaignId}
-                    setSelectedCampaignId={setSelectedCampaignId}
-                    onCreateCampaign={handleCreateCampaign}
-                    stage={stage}
-                    campaign={normalizedCampaign}
-                    donations={donations}
-                    onLiveFileSelect={setLiveFile}
-                    onDocumentFileSelect={setDocumentFile}
-                    onUploadLiveProof={handleUploadLiveProof}
-                    onUploadDocument={handleUploadDocument}
-                    onApprove={handleApprove}
-                    onRequestMilestone={handleRequestMilestone}
-                    onRefresh={readData}
-                    isUploading={isUploading}
-                    uploadPhase={uploadPhase}
-                    isProcessing={isProcessing}
-                    hasLiveFile={!!liveFile}
-                    hasDocumentFile={!!documentFile}
-                    docFileKey={docFileKey}
-                    gps={gps}
-                    proofs={proofs}
+                    account={account.address}
+                    signer={null}
                   />
                 )}
-
-                <AccountInfo
-                  address={account}
-                  provider={provider}
-                  onLogout={disconnect}
-                />
               </>
             )}
-          </div>
+          </>
         )}
 
         {txHash && (
@@ -566,14 +579,26 @@ export default function App() {
             {error}
           </div>
         )}
+      </div>
 
-        {readError && (
-          <div style={{ marginTop: "1.5rem", padding: "1.25rem", background: "#7c2d12", borderRadius: "0.75rem", color: "#fdba74", fontSize: "0.8rem", textAlign: "center", border: "1px solid #9a3412" }}>
-            <div style={{ fontWeight: 'bold', marginBottom: '0.4rem' }}>⚠️ Contract Sync Issue</div>
-            Failed to read from contract. Please ensure you have <b>redeployed</b> the contract and updated the address in <code>contract.ts</code>.
-            <div style={{ fontSize: "0.7rem", marginTop: "0.5rem", opacity: 0.8 }}>{readError.message}</div>
-          </div>
+      {/* SYSTEM DEBUG RIBBON */}
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(2, 6, 23, 0.95)", borderTop: "2px solid #3b82f6", padding: "0.5rem 1rem", fontSize: "0.65rem", fontFamily: "monospace", display: "flex", gap: "1.5rem", color: "#64748b", zIndex: 9999, backdropFilter: "blur(4px)", alignItems: "center" }}>
+        <span style={{ color: "#3b82f6", fontWeight: "bold" }}>[SYSTEM_DEBUG]</span>
+        <span>CHAIN: Polygon Amoy (80002)</span>
+        <span>RPC_COUNT: <b style={{ color: "#f8fafc" }}>{campaignCount ?? "???"}</b></span>
+        <span>SELECTED_ID: <b style={{ color: "#f8fafc" }}>{selectedCampaignId ?? "None"}</b></span>
+        <span>PROOFS_COUNT: <b style={{ color: "#10b981" }}>{normalizedProofs.length}</b></span>
+        <span>CAMPAIGN: <b style={{ color: normalizedCampaign ? "#3b82f6" : "#ef4444" }}>{normalizedCampaign?.name || "NONE_LOADED"}</b></span>
+        {txHash && (
+          <a href={`https://amoy.polygonscan.com/tx/${txHash}`} target="_blank" rel="noreferrer" style={{ color: "#3b82f6", fontWeight: "bold", textDecoration: "none" }}>VIEW_PROTOCOL_TX 🌐</a>
         )}
+        <div style={{ flex: 1 }} />
+        <button 
+          onClick={readData} 
+          style={{ background: "#1e293b", color: "#3b82f6", border: "1px solid #334155", borderRadius: "0.3rem", padding: "0.2rem 0.5rem", cursor: "pointer", fontSize: "0.6rem", fontWeight: "bold" }}
+        >
+          FORCE PROTOCOL SYNC 🔄
+        </button>
       </div>
     </div>
   );

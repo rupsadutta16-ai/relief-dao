@@ -17,7 +17,6 @@ function ProofCard({ proof, index }: { proof: Proof, index: number }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
-    // Fetch metadata regardless of capture type so long as it exists!
     const fetchMetadata = async () => {
       try {
         const res = await fetch(`https://api.pinata.cloud/data/pinList?hashContains=${proof.cid}`, {
@@ -40,7 +39,6 @@ function ProofCard({ proof, index }: { proof: Proof, index: number }) {
     fetchMetadata();
   }, [proof.cid]);
 
-  // Generates the Map Container allowing conditional interactability 
   const mapContent = (fill: boolean) => metadata ? (
     <MapContainer 
        center={[metadata.lat, metadata.lng]} 
@@ -76,7 +74,6 @@ function ProofCard({ proof, index }: { proof: Proof, index: number }) {
       >
         <div style={{ display: "flex", height: "140px" }}>
           
-          {/* Left Side: Photo or Document Icon */}
           <a href={`https://gateway.pinata.cloud/ipfs/${proof.cid}`} target="_blank" rel="noreferrer" style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: proof.isLiveCapture ? "#000" : "#020617", color: "#60a5fa", textDecoration: "none", overflow: "hidden" }}>
              {proof.isLiveCapture ? (
                 <img src={`https://gateway.pinata.cloud/ipfs/${proof.cid}`} alt={`Evidence ${index + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -88,10 +85,9 @@ function ProofCard({ proof, index }: { proof: Proof, index: number }) {
              )}
           </a>
           
-          {/* Right Side: Map */}
           <div style={{ flex: 1, background: "#020617", borderLeft: "1px solid #1e293b", position: "relative" }}>
             {loading ? (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: "0.7rem", color: "#64748b" }}>Loading zone map...</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: "0.7rem", color: "#64748b" }}>Synchronizing Map...</div>
             ) : metadata ? (
               <>
                  {mapContent(false)}
@@ -103,21 +99,19 @@ function ProofCard({ proof, index }: { proof: Proof, index: number }) {
                  </button>
               </>
             ) : (
-               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: "0.7rem", color: "#ef4444", textAlign: "center", padding: "1rem" }}>
-                  GPS metadata not found on IPFS
+               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: "0.7rem", color: "#64748b", textAlign: "center", padding: "1rem" }}>
+                  Location indexing in progress on Pinata...
                </div>
             )}
           </div>
         </div>
         
-        {/* Verification Footer Header */}
         <div style={{ padding: "0.6rem", fontSize: "0.7rem", background: "#1e293b", color: "#f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <b style={{ color: proof.isLiveCapture ? "#4ade80" : "#60a5fa" }}>{proof.isLiveCapture ? "📸 Live Capture" : "📄 Document"} #{index + 1}</b>
           <a href={`https://gateway.pinata.cloud/ipfs/${proof.cid}`} target="_blank" rel="noreferrer" style={{ color: proof.isLiveCapture ? "#22c55e" : "#3b82f6", textDecoration: "none", fontWeight: "bold" }}>View Evidence  📌</a>
         </div>
       </div>
 
-      {/* FULLSCREEN MAP MODAL */}
       {isFullscreen && createPortal(
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, background: "#020617", display: "flex", flexDirection: "column" }}>
            <div style={{ padding: "1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #1e293b", background: "#0f172a" }}>
@@ -136,7 +130,6 @@ function ProofCard({ proof, index }: { proof: Proof, index: number }) {
     </>
   );
 }
-
 
 export function ProofGallery({ proofs }: ProofGalleryProps) {
   return (

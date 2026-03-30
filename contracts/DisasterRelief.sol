@@ -174,7 +174,10 @@ contract DisasterRelief is Ownable {
         // Transfer only if there are funds — stage still advances for demo purposes
         if (amountToRelease > 0) {
             campaign.totalReleased += amountToRelease;
-            campaign.ngo.transfer(amountToRelease);
+            // .transfer() hard-caps at 2300 gas and will revert for smart contract
+            // wallets (ERC-4337 / AA). Use .call{value:}() instead.
+            (bool success, ) = campaign.ngo.call{value: amountToRelease}("");
+            require(success, "ETH transfer to NGO failed");
         }
 
         emit MilestoneApproved(_campaignId, stage, amountToRelease);

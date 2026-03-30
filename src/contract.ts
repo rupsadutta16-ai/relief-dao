@@ -1,22 +1,14 @@
-// --- THIRDWEB CONFIGURATION (COMMENTED OUT) ---
-/*
 import { getContract, defineChain } from "thirdweb";
-import { client } from "./client";
+import { client as baseClient } from "./client";
 
-export const chain = defineChain({
-  id: 1337,
-  rpc: "http://127.0.0.1:8545",
-});
+// Export for other components
+export const client = baseClient;
 
-export const contract = getContract({
-  client,
-  chain,
-  address: contractAddress,
-});
-*/
+// Polygon Amoy Testnet
+export const chain = defineChain(80002);
 
-// Update this after running: npx hardhat run scripts/deploy.cjs --network localhost
-export const contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+// UPDATE: This will be the new Amoy address after deployment
+export const contractAddress = "0x94d9295BF6415353aA733b63088E8b05f2e48227"; // v2 — .call() fix for smart wallet ETH receive
 
 export const contractABI = [
   "function nextCampaignId() view returns (uint256)",
@@ -33,4 +25,11 @@ export const contractABI = [
   "event MilestoneApproved(uint256 indexed id, uint8 stage, uint256 amountReleased)",
   "event MilestoneReleaseRequested(uint256 indexed id, uint8 stage)",
   "event Voted(uint256 indexed id, address voter, bool support, uint256 yesTotal, uint256 noTotal)"
-];
+] as const;
+
+export const contract = getContract({
+  client,
+  chain,
+  address: contractAddress,
+  abi: contractABI as any,
+});
