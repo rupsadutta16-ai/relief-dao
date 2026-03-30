@@ -581,25 +581,6 @@ export default function App() {
         )}
       </div>
 
-      {/* SYSTEM DEBUG RIBBON */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(2, 6, 23, 0.95)", borderTop: "2px solid #3b82f6", padding: "0.5rem 1rem", fontSize: "0.65rem", fontFamily: "monospace", display: "flex", gap: "1.5rem", color: "#64748b", zIndex: 9999, backdropFilter: "blur(4px)", alignItems: "center" }}>
-        <span style={{ color: "#3b82f6", fontWeight: "bold" }}>[SYSTEM_DEBUG]</span>
-        <span>CHAIN: Polygon Amoy (80002)</span>
-        <span>RPC_COUNT: <b style={{ color: "#f8fafc" }}>{campaignCount ?? "???"}</b></span>
-        <span>SELECTED_ID: <b style={{ color: "#f8fafc" }}>{selectedCampaignId ?? "None"}</b></span>
-        <span>PROOFS_COUNT: <b style={{ color: "#10b981" }}>{normalizedProofs.length}</b></span>
-        <span>CAMPAIGN: <b style={{ color: normalizedCampaign ? "#3b82f6" : "#ef4444" }}>{normalizedCampaign?.name || "NONE_LOADED"}</b></span>
-        {txHash && (
-          <a href={`https://amoy.polygonscan.com/tx/${txHash}`} target="_blank" rel="noreferrer" style={{ color: "#3b82f6", fontWeight: "bold", textDecoration: "none" }}>VIEW_PROTOCOL_TX 🌐</a>
-        )}
-        <div style={{ flex: 1 }} />
-        <button 
-          onClick={readData} 
-          style={{ background: "#1e293b", color: "#3b82f6", border: "1px solid #334155", borderRadius: "0.3rem", padding: "0.2rem 0.5rem", cursor: "pointer", fontSize: "0.6rem", fontWeight: "bold" }}
-        >
-          FORCE PROTOCOL SYNC 🔄
-        </button>
-      </div>
     </div>
   );
 }
