@@ -99,7 +99,7 @@ export function NGOView({
       {showCreate && (
         <div style={{ ...theme.glass, background: "rgba(16, 185, 129, 0.05)", padding: "2rem", marginBottom: "2.5rem", border: "1px dashed rgba(16, 185, 129, 0.3)" }}>
           <h3 style={{ fontSize: "1rem", color: "#10b981", marginBottom: "1.5rem", fontWeight: "800" }}>🚀 Initialize New Relief Protocol</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem", marginBottom: "1.5rem" }}>
+          <div className="responsive-grid columns-2" style={{ marginBottom: "1.5rem" }}>
             <div>
               <span style={theme.label}>Campaign Name</span>
               <input
@@ -161,7 +161,7 @@ export function NGOView({
 
       {selectedCampaignId !== null && campaign && (
         <div className="fade-in-up">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "2rem" }}>
+          <div className="mobile-stack" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "2rem" }}>
             <div>
               <div style={{ display: "flex", gap: "0.75rem", marginBottom: "0.5rem" }}>
                  <span style={{ ...theme.badge, background: "#10b98133", color: "#10b981" }}>Active Relief</span>
@@ -170,14 +170,14 @@ export function NGOView({
               <h1 style={{ fontSize: "2rem", fontWeight: "900", color: "#ffffff", margin: 0, letterSpacing: "-0.02em" }}>{campaign.name}</h1>
               <p style={{ color: "#64748b", fontSize: "0.85rem", marginTop: "0.4rem" }}>Registry: <span style={{ fontFamily: "monospace", color: "#94a3b8" }}>{campaign.ngo}</span></p>
             </div>
-            <div style={{ textAlign: "right" }}>
+            <div className="mobile-text-center" style={{ textAlign: "right" }}>
               <div style={{ fontSize: "0.75rem", color: "#94a3b8", fontWeight: "bold", textTransform: "uppercase" }}>Total Contributed</div>
               <div style={{ fontSize: "2.5rem", fontWeight: "900", color: "#10b981", lineHeight: "1" }}>{parseFloat(ethers.formatEther(campaign.donated)).toFixed(2)} <span style={{ fontSize: "1rem", color: "#64748b" }}>POL</span></div>
               <div style={{ fontSize: "0.8rem", color: "#475569", marginTop: "0.5rem" }}>Project Baseline: {ethers.formatEther(campaign.target)} POL</div>
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: "2rem", alignItems: "start" }}>
+          <div className="responsive-grid columns-dashboard" style={{ alignItems: "start" }}>
             <div style={{ ...theme.glass, padding: "2rem" }}>
               <h3 style={{ ...theme.label, marginBottom: "1.5rem", display: "flex", justifyContent: "space-between" }}>
                 <span>Milestone Disbursement Pipeline</span>
@@ -247,14 +247,14 @@ export function NGOView({
                            PROTOCOL BUSY: COMMITING DATA...
                         </div>
                       )}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "2rem" }}>
+                      <div className="responsive-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
                         <button 
                           onClick={() => { console.log("[BTN_CLICK] Camera"); setShowCamera(true); }} 
-                          style={{ ...theme.btn, marginTop: 0, background: "#1e293b", fontSize: "0.85rem", opacity: isProcessing ? 0.5 : 1 }}
+                          style={{ ...theme.btn, marginTop: 0, background: "#1e293b", fontSize: "0.85rem", opacity: isProcessing ? 0.5 : 1, width: "100%" }}
                         >📸 Photo Proof</button>
                         <button 
                           onClick={() => { console.log("[BTN_CLICK] File"); fileInputRef.current?.click(); }} 
-                          style={{ ...theme.btn, marginTop: 0, background: "#1e293b", fontSize: "0.85rem", opacity: isProcessing ? 0.5 : 1 }}
+                          style={{ ...theme.btn, marginTop: 0, background: "#1e293b", fontSize: "0.85rem", opacity: isProcessing ? 0.5 : 1, width: "100%" }}
                         >📄 Logistic Document</button>
                       </div>
 

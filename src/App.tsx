@@ -351,18 +351,18 @@ export default function App() {
 
   return (
     <div style={theme.app}>
-      {/* GLOBAL ERROR HUD */}
-      {error && (
-        <div style={{ position: "fixed", top: "1rem", left: "50%", transform: "translateX(-50%)", zIndex: 10000, background: "#ef4444", color: "white", padding: "1rem 2rem", borderRadius: "1rem", fontWeight: "900", boxShadow: "0 10px 30px rgba(0,0,0,0.5)", border: "2px solid #7f1d1d", fontSize: "0.85rem", maxWidth: "90vw", textAlign: "center" }}>
-          ⚠️ PROTOCOL_CRITICAL: {error}
-          <button onClick={() => setError(null)} style={{ marginLeft: "1.5rem", background: "rgba(255,255,255,0.2)", border: "none", color: "white", borderRadius: "0.5rem", padding: "0.2rem 0.6rem", cursor: "pointer" }}>DISMISS</button>
-        </div>
-      )}
+      <div className="container" style={{ padding: "0 1rem" }}>
+        {/* GLOBAL ERROR HUD */}
+        {error && (
+          <div style={{ position: "fixed", top: "1rem", left: "50%", transform: "translateX(-50%)", zIndex: 10000, background: "#ef4444", color: "white", padding: "1rem 2rem", borderRadius: "1rem", fontWeight: "900", boxShadow: "0 10px 30px rgba(0,0,0,0.5)", border: "2px solid #7f1d1d", fontSize: "0.85rem", maxWidth: "90vw", textAlign: "center" }}>
+            ⚠️ PROTOCOL_CRITICAL: {error}
+            <button onClick={() => setError(null)} style={{ marginLeft: "1.5rem", background: "rgba(255,255,255,0.2)", border: "none", color: "white", borderRadius: "0.5rem", padding: "0.2rem 0.6rem", cursor: "pointer" }}>DISMISS</button>
+          </div>
+        )}
 
-      <div style={{ ...theme.card, marginTop: "2rem" }}>
-        <header style={{ textAlign: "center", marginBottom: "3rem" }}>
+        <header style={{ textAlign: "center", paddingTop: "3rem", marginBottom: "3rem" }}>
           <div style={{ display: "inline-block", background: "linear-gradient(135deg, #3b82f611, #10b98111)", padding: "1rem 2rem", borderRadius: "1.5rem", border: "1px solid #1e293b", marginBottom: "1.5rem" }}>
-            <h1 style={{ fontSize: "2.5rem", fontWeight: "900", background: "linear-gradient(to right, #3b82f6, #10b981)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", margin: 0 }}>
+            <h1 style={{ fontSize: "clamp(1.5rem, 8vw, 2.8rem)", fontWeight: "900", background: "linear-gradient(to right, #3b82f6, #10b981)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", margin: 0 }}>
               ReliefDAO {selectedCampaignId !== null && campaign ? `- ${campaign[0]}` : ""}
             </h1>
             <p style={{ color: "#94a3b8", fontSize: "0.9rem", marginTop: "0.5rem", fontWeight: "500", letterSpacing: "0.05em" }}>
@@ -372,8 +372,8 @@ export default function App() {
 
           <div style={{ marginBottom: "2rem" }}>
             {!account ? (
-              <div style={{ background: "#1e293b", padding: "1.5rem", borderRadius: "1rem", border: "1px solid #334155" }}>
-                <h3 style={{ fontSize: "1rem", margin: "0 0 1rem 0", textAlign: "center", color: "#94a3b8" }}>Authentication</h3>
+              <div style={{ background: "#0f172a", padding: "2rem", borderRadius: "1.5rem", border: "1px solid #1e293b", display: "inline-block", minWidth: "300px" }}>
+                <h3 style={{ fontSize: "0.9rem", margin: "0 0 1rem 0", textAlign: "center", color: "#94a3b8", textTransform: "uppercase", fontWeight: "bold" }}>Join the Protocol</h3>
                 <div style={{ display: "flex", justifyContent: "center" }}>
                    <ConnectButton
                       client={client}
@@ -387,30 +387,36 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              <div style={{ background: "#0f172a", padding: "1rem 1.5rem", borderRadius: "1rem", border: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+              <div className="mobile-stack" style={{ background: "#0f172a", padding: "1rem 1.5rem", borderRadius: "1rem", border: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div className="mobile-stack" style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
                   <AccountInfo 
                     address={account.address} 
                     onDisconnect={() => { if(wallet) disconnect(wallet); }} 
                   />
                 </div>
+                <button 
+                  onClick={() => { setRole(null); setSelectedCampaignId(null); }} 
+                  style={{ background: "rgba(59, 130, 246, 0.1)", border: "1px solid rgba(59, 130, 246, 0.2)", color: "#3b82f6", cursor: "pointer", fontSize: "0.75rem", padding: "0.4rem 0.8rem", borderRadius: "0.5rem", fontWeight: "bold" }}
+                >
+                  Change Role
+                </button>
               </div>
             )}
           </div>
         </header>
 
         {!account ? (
-          <div style={{ textAlign: "center", padding: "4rem 0", color: "#475569" }}>
-            <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>🌍</div>
-            <h2 style={{ color: "#94a3b8", fontSize: "1.5rem", fontWeight: "700" }}>Welcome to ReliefDAO</h2>
-            <p style={{ maxWidth: "400px", margin: "1rem auto", lineHeight: "1.6" }}>
-              Connect your wallet to participate in decentralized humanitarian aid and transparent milestone verification.
+          <div className="fade-in" style={{ textAlign: "center", padding: "4rem 0", color: "#475569" }}>
+            <div style={{ fontSize: "5rem", marginBottom: "1.5rem" }}>🌍</div>
+            <h2 style={{ color: "#f8fafc", fontSize: "1.75rem", fontWeight: "900", marginBottom: "1rem" }}>Global Transparency for Crisis Relief</h2>
+            <p style={{ maxWidth: "500px", margin: "0 auto", lineHeight: "1.7", color: "#94a3b8" }}>
+              ReliefDAO automates aid disbursement using smart contracts, on-chain evidence, and community governance. Connect your wallet to begin.
             </p>
           </div>
         ) : (
           <>
             {!role ? (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "2rem", padding: "1rem 0" }}>
+              <div className="responsive-grid columns-3">
                 {[
                   { id: "donor", title: "Donor Portal", desc: "Contribute to life-saving campaigns and audit fund trails in real-time.", color: "#3b82f6", icon: "💎" },
                   { id: "ngo", title: "NGO Workspace", desc: "Manage tranches, upload proof of execution, and request milestone releases.", color: "#10b981", icon: "🏗️" },
@@ -580,7 +586,6 @@ export default function App() {
           </div>
         )}
       </div>
-
     </div>
   );
 }

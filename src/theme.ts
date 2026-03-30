@@ -4,7 +4,7 @@ export const theme = {
     minHeight: "100vh",
     color: "#f8fafc",
     fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
-    padding: "2rem 1rem",
+    padding: "clamp(1rem, 5vw, 2.5rem) 1rem",
   },
   glass: {
     background: "rgba(15, 23, 42, 0.65)",
@@ -17,8 +17,8 @@ export const theme = {
   card: {
     background: "#0f172a",
     borderRadius: "1.5rem",
-    padding: "2rem",
-    maxWidth: "800px", // Increased for better layout
+    padding: "clamp(1rem, 5vw, 2rem)",
+    maxWidth: "1100px", 
     margin: "0 auto",
     boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
     border: "1px solid #1e293b",

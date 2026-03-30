@@ -71,11 +71,11 @@ export function BeneficiaryView({
       {selectedCampaignId !== null && campaign && (
         <div className="fade-in-up">
           <div style={{ ...theme.glass, padding: "2rem", marginBottom: "2rem", border: "1px solid rgba(139, 92, 246, 0.2)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div className="mobile-stack" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                <div>
                   <div style={{ ...theme.badge, background: "#8b5cf633", color: "#8b5cf6", display: "inline-block", marginBottom: "0.5rem" }}>Community Governed</div>
                   <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.75rem", fontWeight: "900", letterSpacing: "-0.02em" }}>{campaign.name}</h3>
-                  <div style={{ fontSize: "0.85rem", color: "#94a3b8", display: "flex", gap: "1.5rem" }}>
+                  <div className="mobile-stack" style={{ fontSize: "0.85rem", color: "#94a3b8", display: "flex", gap: "1.5rem" }}>
                     <span style={{ color: campaign.isActive ? "#10b981" : "#ef4444" }}>
                       ● {campaign.isActive ? "Protocol Active" : "Finalized"}
                     </span>
@@ -84,14 +84,14 @@ export function BeneficiaryView({
                     </span>
                   </div>
                </div>
-               <div style={{ textAlign: "right" }}>
+               <div className="mobile-text-center" style={{ textAlign: "right" }}>
                   <div style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: "900", textTransform: "uppercase" }}>Disbursed Funds</div>
                   <div style={{ fontSize: "1.75rem", fontWeight: "900", color: "#8b5cf6" }}>{parseFloat(ethers.formatEther(campaign.released || "0")).toFixed(2)} POL</div>
                </div>
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem", alignItems: "start" }}>
+          <div className="responsive-grid columns-2" style={{ alignItems: "start" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
                 {/* Voting Action Area */}
                 {stage >= 1 && campaign.milestoneRequested ? (

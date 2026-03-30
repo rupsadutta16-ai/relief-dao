@@ -101,13 +101,13 @@ export function DonorView({
       ) : (
         <div className="fade-in-up">
           <div style={{ ...theme.glass, padding: "2.5rem", border: "1px solid rgba(59, 130, 246, 0.2)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2rem" }}>
+            <div className="mobile-stack" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2rem" }}>
                <div>
                   <div style={{ ...theme.badge, background: "#3b82f633", color: "#3b82f6", display: "inline-block", marginBottom: "0.5rem" }}>Blockchain Audited</div>
                   <h3 style={{ fontSize: "1.75rem", margin: 0, fontWeight: "900", color: "#f8fafc", letterSpacing: "-0.02em" }}>{name}</h3>
-                  <p style={{ color: "#64748b", fontSize: "0.85rem", marginTop: "0.5rem" }}>Responsible NGO: {campaign?.ngo.slice(0, 8)}...{campaign?.ngo.slice(-6)}</p>
+                  <p style={{ color: "#64748b", fontSize: "0.85rem", marginTop: "0.5rem" }}>NGO: {campaign?.ngo.slice(0, 8)}...{campaign?.ngo.slice(-6)}</p>
                </div>
-               <div style={{ textAlign: "right" }}>
+               <div className="mobile-text-center" style={{ textAlign: "right" }}>
                   <div style={{ fontSize: "2rem", fontWeight: "900", color: "#3b82f6", lineHeight: "1" }}>{raised.toFixed(4)} <span style={{ fontSize: "0.8rem", color: "#64748b" }}>POL</span></div>
                   <div style={{ fontSize: "0.75rem", color: "#475569", marginTop: "0.4rem", fontWeight: "700" }}>GOAL: {target.toFixed(2)} POL</div>
                </div>
@@ -118,7 +118,7 @@ export function DonorView({
               <div style={{ background: "linear-gradient(90deg, #3b82f6, #60a5fa)", height: "100%", width: `${progress}%`, transition: "width 1s cubic-bezier(0.4, 0, 0.2, 1)", boxShadow: "0 0 20px rgba(59, 130, 246, 0.3)" }} />
             </div>
             
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginBottom: "2.5rem" }}>
+            <div className="responsive-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "1rem", marginBottom: "2.5rem" }}>
                {[1, 2, 3].map((num) => (
                  <div key={num} style={{ background: "rgba(15, 23, 42, 0.4)", padding: "1.25rem", borderRadius: "1.25rem", textAlign: "center", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
                     <div style={{ marginBottom: "0.75rem", fontSize: "0.75rem", fontWeight: "900", color: "#475569", letterSpacing: "0.1em" }}>PILOT {num}</div>
@@ -174,7 +174,7 @@ export function DonorView({
               </button>
             </div>
             
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem", marginTop: "2.5rem" }}>
+            <div className="responsive-grid columns-2" style={{ marginTop: "2.5rem" }}>
               <ProofGallery proofs={proofs} />
               <TransparencyDashboard donations={donations} />
             </div>

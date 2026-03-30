@@ -38,7 +38,7 @@ export function VotingStatusBanner({
       </div>
 
       {/* Live Tally */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+      <div className="responsive-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "0.75rem", marginBottom: "1rem" }}>
         <div style={{ background: "#064e3b33", border: "1px solid #065f46", borderRadius: "0.75rem", padding: "0.75rem", textAlign: "center" }}>
           <div style={{ fontSize: "0.6rem", color: "#94a3b8", marginBottom: "0.2rem" }}>YES VOTES</div>
           <div style={{ fontSize: "1.4rem", fontWeight: "900", color: "#4ade80" }}>{yesVotes}</div>
