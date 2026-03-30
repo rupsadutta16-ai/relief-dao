@@ -1,0 +1,58 @@
+export const theme = {
+  app: {
+    background: "#020617",
+    minHeight: "100vh",
+    color: "white",
+    fontFamily: "Inter, system-ui, sans-serif",
+    padding: "2rem 1rem",
+  },
+  card: {
+    background: "#0f172a",
+    borderRadius: "1.25rem",
+    padding: "2rem",
+    maxWidth: "550px",
+    margin: "0 auto",
+    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+    border: "1px solid #1e293b",
+  },
+  section: {
+    marginTop: "2rem",
+  },
+  badge: {
+    fontSize: "0.7rem",
+    padding: "0.2rem 0.5rem",
+    borderRadius: "1rem",
+    fontWeight: "bold" as const,
+  },
+  statusClaimed: { background: "#064e3b", color: "#4ade80" },
+  statusAction: { background: "#78350f", color: "#fbbf24" },
+  statusLocked: { background: "#334155", color: "#94a3b8" },
+  btn: {
+    background: "#3b82f6",
+    color: "white",
+    border: "none",
+    padding: "1rem",
+    borderRadius: "0.75rem",
+    fontWeight: "bold" as const,
+    cursor: "pointer",
+    width: "100%",
+    marginTop: "1rem",
+    transition: "opacity 0.2s",
+  },
+  input: {
+    background: "#020617",
+    border: "1px solid #334155",
+    color: "white",
+    padding: "0.75rem",
+    borderRadius: "0.5rem",
+    width: "100%",
+    marginTop: "0.5rem",
+    fontSize: "1rem",
+  },
+  label: {
+    fontSize: "0.7rem",
+    color: "#64748b",
+    fontWeight: "bold" as const,
+    textTransform: "uppercase" as const,
+  }
+};
